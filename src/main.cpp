@@ -1,71 +1,149 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include "SoftAPServer.h"
 
-IPAddress local_IP(192, 168, 0, 2);
-IPAddress gateway(192, 168, 0, 1);
-IPAddress subnet(255, 255, 255, 0);
+const uint8_t LED_RED = D0;
+const uint8_t LED_GREEN = D1;
+const uint8_t LED_BLUE = D2;
 
-void handleRoot();
-void handleLogin();
-void handleNotFound();
+const uint8_t BUTTON = D5;
 
-ESP8266WebServer server(80);
-const String ssid = "ESPx";
+WiFiUDP Udp;
+unsigned int localUdpPort = 4210;  // local port to listen on
+char incomingPacket[255];  // buffer for incoming packets
+char  replyPacket[] = "Hi there! Got the message :-)";  // a reply string to send back
+
+bool startedUDP = false;
 
 void setup() {
     Serial.begin(115200);
+    Serial.println("\nSetup");
 
-    Serial.print("Configuring SoftAP Configuration...");
-    Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ? "Ready" : "Failed!");
+    pinMode(BUTTON, INPUT_PULLUP);
 
-    Serial.print("Setting SoftAP...");
-    String macAddr = WiFi.macAddress();
-    macAddr.replace(":", "");
-    Serial.println(WiFi.softAP(ssid + macAddr) ? "Ready" : "Failed!");
+    pinMode(LED_RED, OUTPUT);
+    pinMode(LED_GREEN, OUTPUT);
+    pinMode(LED_BLUE, OUTPUT);
+    digitalWrite(LED_RED, HIGH);
+    digitalWrite(LED_GREEN, HIGH);
+    digitalWrite(LED_BLUE, HIGH);
 
-    Serial.println();
-    Serial.print("connect to the IP Address given below...");
-    Serial.println(WiFi.softAPIP());
-
-    server.on("/", HTTP_GET, handleRoot);
-    server.on("/connect", HTTP_POST, handleLogin);
-    server.onNotFound(handleNotFound);
-
-    server.begin();
+    if(digitalRead(BUTTON) == LOW) {
+        Serial.println("Start soft ap");
+        SoftAPServer::startSoftAp();
+    } else{
+        Serial.println("Connecting");
+        while (WiFi.status() != WL_CONNECTED){
+            Serial.print(".");
+            delay(500);
+        }
+        Serial.println("\nConnected");
+        Serial.println("IP: " + WiFi.localIP().toString());
+    }
 }
 
 void loop() {
-    server.handleClient();
-}
+    int packetSize = Udp.parsePacket();
+    if (packetSize) {
+        // receive incoming UDP packets
+        Serial.printf("Received %d bytes from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
+        int len = Udp.read(incomingPacket, 255);
+        if (len > 0)
+        {
+            incomingPacket[len] = 0;
+        }
+        Serial.printf("UDP packet contents: %s\n", incomingPacket);
 
-void handleRoot() {
-    Serial.println("handleRoot");
-    server.send(200, "text/html",
-                R"(<form action="/connect" method="POST"><input type="text" name="ssid" placeholder="Ssid"></br><input type="password" name="password" placeholder="Password"></br><input type="submit" value="Login"></form>)");
-}
+        switch (incomingPacket[0]) {
+            case 'r':
+                digitalWrite(LED_RED, LOW);
+                break;
+            case 'g':
+                digitalWrite(LED_GREEN, LOW);
+                break;
+            case 'b':
+                digitalWrite(LED_BLUE, LOW);
+                break;
+            case 'd':
+                for(uint8_t i = 0; i < 3; i++){
+                    digitalWrite(LED_RED, LOW);
+                    delay(500);
+                    digitalWrite(LED_RED, HIGH);
+                    digitalWrite(LED_GREEN, LOW);
+                    delay(500);
+                    digitalWrite(LED_GREEN, HIGH);
+                    digitalWrite(LED_BLUE, LOW);
+                    delay(500);
+                    digitalWrite(LED_BLUE, HIGH);
 
-void handleLogin() {
-    Serial.println("handleLogin");
-    if (!server.hasArg("ssid") && !server.hasArg("password")) {
-        if (server.arg("ssid") == nullptr || server.arg("password") == nullptr) {
-            server.send(400, "text/plain","400: Invalid Request");
-            return;
+
+                    digitalWrite(LED_RED, LOW);
+                    delay(500);
+                    digitalWrite(LED_GREEN, LOW);
+                    delay(500);
+                    digitalWrite(LED_BLUE, LOW);
+                    delay(500);
+
+                    digitalWrite(LED_RED, LOW);
+                    digitalWrite(LED_BLUE, LOW);
+                    delay(500);
+                    digitalWrite(LED_RED, HIGH);
+                    digitalWrite(LED_BLUE, HIGH);
+
+                    digitalWrite(LED_GREEN, LOW);
+                    digitalWrite(LED_BLUE, LOW);
+                    delay(500);
+                    digitalWrite(LED_GREEN, HIGH);
+                    digitalWrite(LED_BLUE, HIGH);
+
+                    digitalWrite(LED_RED, HIGH);
+                    digitalWrite(LED_GREEN, HIGH);
+                    digitalWrite(LED_BLUE, HIGH);
+
+                    for(uint8_t y = 0; y < 10; y++) {
+                        digitalWrite(LED_RED, HIGH);
+                        delay(50);
+                        digitalWrite(LED_RED, LOW);
+                        delay(50);
+                    }
+                    digitalWrite(LED_RED, HIGH);
+
+                    for(uint8_t y = 0; y < 10; y++) {
+                        digitalWrite(LED_GREEN, HIGH);
+                        delay(50);
+                        digitalWrite(LED_GREEN, LOW);
+                        delay(50);
+                    }
+                    digitalWrite(LED_GREEN, HIGH);
+
+                    for(uint8_t y = 0; y < 10; y++) {
+                        digitalWrite(LED_BLUE, HIGH);
+                        delay(50);
+                        digitalWrite(LED_BLUE, LOW);
+                        delay(50);
+                    }
+                    digitalWrite(LED_BLUE, HIGH);
+                }
+                break;
+            default:
+                digitalWrite(LED_RED, HIGH);
+                digitalWrite(LED_GREEN, HIGH);
+                digitalWrite(LED_BLUE, HIGH);
+                break;
+        }
+
+        // send back a reply, to the IP address and port we got the packet from
+        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+        Udp.write(replyPacket);
+        Udp.endPacket();
+    }
+
+    if(SoftAPServer::needsToProcess()){
+        SoftAPServer::processRequest();
+    } else{
+        if(!startedUDP){
+            Udp.begin(localUdpPort);
+            Serial.printf("Now listening at IP %s, UDP port %d\n", WiFi.localIP().toString().c_str(), localUdpPort);
+            startedUDP = true;
         }
     }
-    String ssid_to_connect = server.arg("ssid");
-    String pass_to_connect = server.arg("password");
-    server.send(200, "text/html", "<h1>Connecting to " + server.arg("ssid") + "</h1>");
-    WiFi.begin(ssid_to_connect, pass_to_connect);
-    while (WiFi.status() != WL_CONNECTED){
-        Serial.print(".");
-        delay(500);
-    }
-    Serial.println("\nConnected tot WiFi");
-    WiFi.softAPdisconnect(true);
-    server.close();
-}
-
-void handleNotFound() {
-    Serial.println("handleNotFound");
-    server.send(404, "text/plain","404: Not found");
 }
