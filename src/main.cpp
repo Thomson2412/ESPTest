@@ -10,7 +10,7 @@ const uint8_t BUTTON = D5;
 WiFiUDP udp;
 const unsigned int UDP_PORT = 4210;  // local port to listen on
 char incomingPacket[255];  // buffer for incoming packets
-char  replyPacket[] = "Message received \n";  // a reply string to send back
+char  replyPacket[] = "Message received";  // a reply string to send back
 
 bool startedUDP = false;
 bool connectedToServer = false;
@@ -72,7 +72,12 @@ void loop() {
 
         // send back a reply, to the IP address and port we got the packet from
         udp.beginPacket(udp.remoteIP(), udp.remotePort());
-        udp.write(replyPacket);
+        char middle[] = ": ";
+        char* reply = new char[strlen(replyPacket) + strlen(middle)+1 + strlen(incomingPacket)+1];
+        strcpy(reply, replyPacket);
+        strcat(reply, middle);
+        strcat(reply, incomingPacket);
+        udp.write(reply);
         udp.endPacket();
 
         if(incomingPacket[0] == 't'){
