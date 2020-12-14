@@ -76,12 +76,20 @@ void SoftAPServer::handleLogin() {
     server.send(200, "text/html", "<h1>Connecting to " + server.arg("SSID") + "</h1>");
 
     WiFi.begin(ssid_to_connect, pass_to_connect);
-    while (WiFi.status() != WL_CONNECTED){
+    uint8_t checkCount = 0;
+    while (WiFi.status() != WL_CONNECTED && checkCount < 60){
         Serial.print(".");
-        delay(500);
+        delay(1000);
+        checkCount++;
     }
-    Serial.println("\nConnected tot WiFi");
-    Serial.println("IP: " + WiFi.localIP().toString());
+    if(WiFi.status() != WL_CONNECTED){
+        Serial.println("\nStart soft ap");
+        SoftAPServer::startSoftAp();
+    } else{
+        Serial.println("\nConnected");
+        Serial.println("IP: " + WiFi.localIP().toString());
+    }
+
     WiFi.softAPdisconnect(true);
     server.close();
     dnsServer.stop();

@@ -45,12 +45,13 @@ void setup() {
             delay(1000);
             checkCount++;
         }
-        if(WiFi.status() == WL_CONNECTED){
+        //Common function? Callback? Used here and in softAPServer
+        if(WiFi.status() != WL_CONNECTED){
+            Serial.println("\nStart soft ap");
+            SoftAPServer::startSoftAp();
+        } else{
             Serial.println("\nConnected");
             Serial.println("IP: " + WiFi.localIP().toString());
-        } else{
-            Serial.println("Start soft ap");
-            SoftAPServer::startSoftAp();
         }
     }
 }
